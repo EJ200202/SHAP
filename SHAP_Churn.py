@@ -8,91 +8,88 @@ from sklearn.metrics import classification_report
 import matplotlib.pyplot as plt
 from streamlit_shap import st_shap
 
-# Title and Introduction
-st.title("Customer Churn Prediction with SHAP")
-st.write("""
-This app allows you to explore how the RandomForestClassifier model predicts customer churn 
-and understand which features contribute most to the model's decisions.
-""")
-
-# Load Dataset
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
-if uploaded_file is not None:
-    customer = pd.read_csv(uploaded_file)
-else:
-    # For the purpose of the example, load a default dataset if no file is uploaded
-    customer = pd.read_csv("Customer Churn.csv")  # Replace with your default file path
+# Load the dataset (assuming it's in the same directory)
+customer = pd.read_csv("Customer Churn.csv")
 
 # Preprocessing
 X = customer.drop("Churn", axis=1)
 y = customer.Churn
+
+# Train-test split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=1)
 
-# Model Training
+# Model training
 clf = RandomForestClassifier()
 clf.fit(X_train, y_train)
+
+# Make predictions
 y_pred = clf.predict(X_test)
 
-# SHAP Explainer
+# SHAP explainer
 explainer = shap.TreeExplainer(clf)
 shap_values = explainer.shap_values(X_test)
 
+# Streamlit app
+st.title("SHAP Analysis for Customer Churn")
+
 # Part 1: General SHAP Analysis
 st.header("Part 1: General SHAP Analysis")
+st.dataframe(classification_report(y_pred, y_test,output_dict=True))
 
-# Display Classification Report
-st.subheader("Classification Report")
-report = classification_report(y_test, y_pred, output_dict=True)
-st.dataframe(report)
-
-# SHAP Summary Plot
-st.subheader("SHAP Summary Plot")
+# Summary plot
+st.subheader("Summary Plot")
 fig, ax = plt.subplots()
 shap.summary_plot(shap_values, X_test, show=False)
+st.pyplot(fig)
+
+# Summary plot for class 0
+st.subheader("Summary Plot for Class 0")
+fig, ax = plt.subplots()
+shap.summary_plot(shap_values[0], X_test, show=False)
 st.pyplot(fig)
 
 # Part 2: Individual Input Prediction & Explanation
 st.header("Part 2: Individual Input Prediction & Explanation")
 
-# Dropdown to Select Data Point
-st.subheader("Force Plot")
-index = st.slider("Select data point index", 0, len(X_test) - 1, 0)
-st_shap(shap.force_plot(explainer.expected_value[0], shap_values[0][index], X_test.iloc[index]), height=400, width=1000)
-
-# SHAP Decision Plot
-st.subheader("Decision Plot")
-st_shap(shap.decision_plot(explainer.expected_value[0], shap_values[0], X_test.iloc[index:index+1]))
-
-# Interactive Feature Adjustment
-st.subheader("Adjust Feature Values and Predict")
+# Input fields for features
 input_data = {}
 for feature in X.columns:
-    input_data[feature] = st.slider(f"Adjust {feature}", float(X[feature].min()), float(X[feature].max()), float(X[feature].mean()))
+    if feature in ['Call  Failure', 'Complains', 'Subscription  Length', 'Status' 'Seconds of Use',
+                   'Frequency of use', 'Frequency of SMS', 'Distinct Called Numbers', 'Age Group', 'Age']:
+        input_data[feature] = st.number_input(f"Enter {feature}:", value=int(X_test[feature].mean()), step=1)
+    else:  # For other features, keep the original input type
+        input_data[feature] = st.number_input(f"Enter {feature}:", value=X_test[feature].mean())
 
-# Convert input data to DataFrame
+
+# Create a DataFrame from input data
 input_df = pd.DataFrame(input_data, index=[0])
 
-# Predict on adjusted features
+# Make prediction
 prediction = clf.predict(input_df)[0]
 probability = clf.predict_proba(input_df)[0][1]  # Probability of churn
 
-# Display Prediction and Probability
+# Display prediction
 st.write(f"**Prediction:** {'Churn' if prediction == 1 else 'No Churn'}")
 st.write(f"**Churn Probability:** {probability:.2f}")
 
-# SHAP Explanation for the Adjusted Input
+# SHAP explanation for the input
 shap_values_input = explainer.shap_values(input_df)
 
-# Display Force Plot for Adjusted Input
-st.subheader("Force Plot for Adjusted Input")
+
+# Force plot
+st.subheader("Force Plot")
+# fig, ax = plt.subplots()
+# shap.plots.force(explainer.expected_value[0], shap_values_input[0,:], input_df.iloc[0,:], matplotlib=True)
 st_shap(shap.force_plot(explainer.expected_value[0], shap_values_input[0], input_df), height=400, width=1000)
 
-# Insights and Interpretation
-st.header("Insights and Interpretation")
-st.write("""
-The SHAP analysis reveals that features such as [mention key features] have a significant impact on the churn prediction. 
-We observed that [describe specific interactions or insights]. 
-This helps in understanding the model's decision-making process and identifying areas where the model might be biased or limited.
-""")
+# st.write(input_df)
+# st.pyplot(fig,bbox_inches='tight')
+
+# Decision plot
+st.subheader("Decision Plot")
+# fig, ax = plt.subplots()
+# shap.decision_plot(explainer.expected_value[0], shap_values_input[0], X_test.columns)
+st_shap(shap.decision_plot(explainer.expected_value[0], shap_values_input[0], X_test.columns))
+# st.pyplot(fig)
 
 
